@@ -4,9 +4,9 @@ import {
   Post,
   Body,
   Param,
-  Query,
   Version,
   ParseUUIDPipe,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -14,12 +14,21 @@ import {
   ApiResponse,
   ApiParam,
   ApiQuery,
+  ApiHeader,
 } from '@nestjs/swagger';
 import { CreateDocumentDto } from './dto/create-document.dto';
 import { DocumentsService } from './documents.service';
 import { UUID } from '../../core/shared';
+import { TenantGuard } from '../../core/infrastructure/security/guards/tenant.guard';
+import { CurrentTenant } from '../../core/infrastructure/security/decorators/current-tenant.decorator';
 
 @ApiTags('Fiscal Documents')
+@ApiHeader({
+  name: 'X-Tenant-ID',
+  description: 'The unique identifier of the tenant',
+  required: true,
+})
+@UseGuards(TenantGuard)
 @Controller('fiscal-documents')
 export class FiscalDocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
@@ -28,7 +37,12 @@ export class FiscalDocumentsController {
   @Post()
   @ApiOperation({ summary: 'Create a draft fiscal document' })
   @ApiResponse({ status: 201, description: 'Document draft created' })
-  create(@Body() createDto: CreateDocumentDto) {
+  create(
+    @CurrentTenant() tenantId: UUID,
+    @Body() createDto: CreateDocumentDto,
+  ) {
+    // Override body tenantId with the one from the trusted context/header
+    createDto.tenantId = tenantId;
     return this.documentsService.create(createDto);
   }
 
@@ -57,14 +71,17 @@ export class FiscalDocumentsController {
   @Get(':id')
   @ApiOperation({ summary: 'Get fiscal document status and data' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
-  findOne(@Param('id', ParseUUIDPipe) id: UUID, @Query('tenantId') tenantId: UUID) {
+  findOne(
+    @Param('id', ParseUUIDPipe) id: UUID,
+    @CurrentTenant() tenantId: UUID,
+  ) {
     return this.documentsService.findOne(id, tenantId);
   }
 
   @Version('1')
   @Get(':id/audit')
   @ApiOperation({ summary: 'Get full audit trail for a document' })
-  getAudit(@Param('id', ParseUUIDPipe) id: UUID) {
+  getAudit() {
     return {
       success: true,
       data: [{ event: 'created', timestamp: new Date() }],
@@ -83,14 +100,8 @@ export class FiscalDocumentsController {
   @Version('1')
   @Get()
   @ApiOperation({ summary: 'Search and list fiscal documents' })
-  @ApiQuery({ name: 'tenantId', required: true })
   @ApiQuery({ name: 'status', required: false })
-  findAll(
-    @Query('tenantId') tenantId: UUID,
-    @Query('status') status?: string,
-    @Query('page') page = 1,
-    @Query('limit') limit = 10,
-  ) {
+  findAll(@CurrentTenant() tenantId: UUID) {
     return this.documentsService.findAll(tenantId);
   }
 }
