@@ -8,6 +8,7 @@ import { DocumentsModule } from './modules/documents/documents.module';
 import { CertificatesModule } from './modules/certificates/certificates.module';
 import { PrismaModule } from './core/infrastructure/prisma/prisma.module';
 import { SecurityModule } from './core/infrastructure/security/security.module';
+import { AfipModule } from './core/infrastructure/afip/afip.module';
 import appConfig from './modules/config/app.config';
 
 @Module({
@@ -19,6 +20,7 @@ import appConfig from './modules/config/app.config';
     }),
     PrismaModule,
     SecurityModule,
+    AfipModule,
     ObservabilityModule,
     HealthModule,
     FiscalModule,

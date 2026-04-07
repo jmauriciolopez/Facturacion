@@ -4,13 +4,23 @@ import { REPOSITORY_TOKENS } from '../../core/domain/repositories/tokens';
 import { FiscalDocumentRepository } from '../../core/domain/repositories/fiscal-document.repository';
 import { UUID } from '../../core/shared';
 import { FiscalStatus } from '../../core/domain/enums';
+import { WsfeService } from '../../core/infrastructure/afip/wsfe.service';
 
 @Injectable()
 export class DocumentsService {
   constructor(
     @Inject(REPOSITORY_TOKENS.FISCAL_DOCUMENT)
     private readonly documentRepo: FiscalDocumentRepository,
+    private readonly wsfe: WsfeService,
   ) {}
+
+  async authorize(id: UUID, tenantId: UUID) {
+    // 1. Verify existence and tenant
+    await this.findOne(id, tenantId);
+
+    // 2. Trigger AFIP authorization
+    return this.wsfe.authorizeDocument(tenantId, id);
+  }
 
   async create(createDocumentDto: CreateDocumentDto) {
     const { items, customer, ...rest } = createDocumentDto;

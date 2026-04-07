@@ -50,21 +50,16 @@ export class FiscalDocumentsController {
   @Post(':id/issue')
   @ApiOperation({ summary: 'Issue/Authorize a fiscal document with AFIP' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
-  issue(@Param('id', ParseUUIDPipe) id: UUID) {
-    // Logic for AFIP authorization will be added in Stage 6
-    return {
-      success: true,
-      message: 'Document issuance process started (Stage 6 functionality)',
-      data: { id, status: 'pending' },
-    };
+  issue(@Param('id', ParseUUIDPipe) id: UUID, @CurrentTenant() tenantId: UUID) {
+    return this.documentsService.authorize(id, tenantId);
   }
 
   @Version('1')
   @Post(':id/retry')
   @ApiOperation({ summary: 'Retry a failed or pending document issuance' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
-  retry(@Param('id', ParseUUIDPipe) id: UUID) {
-    return { success: true, message: 'Retry attempt initiated', data: { id } };
+  retry(@Param('id', ParseUUIDPipe) id: UUID, @CurrentTenant() tenantId: UUID) {
+    return this.documentsService.authorize(id, tenantId);
   }
 
   @Version('1')
