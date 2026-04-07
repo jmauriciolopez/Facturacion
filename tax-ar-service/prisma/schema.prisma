@@ -1,0 +1,286 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum FiscalEnvironment {
+  homologation
+  production
+}
+
+enum FiscalStatus {
+  draft
+  pending
+  authorized
+  rejected
+  error
+  cancelled
+}
+
+enum IvaCondition {
+  RI
+  MT
+  EX
+  CF
+  NR
+}
+
+enum AuditEventType {
+  document_created
+  document_validated
+  document_validation_failed
+  wsaa_token_requested
+  wsaa_token_refreshed
+  wsfev1_request_sent
+  wsfev1_response_received
+  document_authorized
+  document_rejected
+  document_error
+  retry_attempted
+  pdf_generated
+  qr_generated
+}
+
+model Tenant {
+  id                String            @id @default(uuid())
+  name              String
+  clientCuit        String            @unique @map("client_cuit")
+  apiKeyHash        String            @unique @map("api_key_hash")
+  isActive          Boolean           @default(true) @map("is_active")
+  fiscalEnvironment FiscalEnvironment @default(homologation) @map("fiscal_environment")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  fiscalProfile   FiscalProfile?
+  pointsOfSale    PointOfSale[]
+  customers       Customer[]
+  certificates    TenantCertificate[]
+  accessTickets   AccessTicket[]
+  fiscalDocuments FiscalDocument[]
+  fiscalEvents    FiscalEvent[]
+  idempotencyKeys IdempotencyKey[]
+
+  @@map("tenants")
+}
+
+model FiscalProfile {
+  id                String       @id @default(uuid())
+  tenantId          String       @unique @map("tenant_id")
+  cuit              String
+  businessName      String       @map("business_name")
+  fantasyName       String?      @map("fantasy_name")
+  ivaCondition      IvaCondition @map("iva_condition")
+  address           String
+  city              String
+  province          String
+  zipCode           String       @map("zip_code")
+  activityStartDate String       @map("activity_start_date")
+  isActive          Boolean      @default(true) @map("is_active")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("fiscal_profiles")
+}
+
+model PointOfSale {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  number      Int
+  description String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  fiscalDocuments FiscalDocument[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId])
+  @@map("points_of_sale")
+}
+
+model Customer {
+  id           String       @id @default(uuid())
+  tenantId     String       @map("tenant_id")
+  docType      Int          @map("doc_type")
+  docNumber    String       @map("doc_number")
+  businessName String       @map("business_name")
+  ivaCondition IvaCondition @map("iva_condition")
+  address      String?
+  email        String?
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id])
+  fiscalDocuments FiscalDocument[]
+
+  @@unique([tenantId, docType, docNumber])
+  @@index([tenantId])
+  @@map("customers")
+}
+
+model FiscalDocument {
+  id               String       @id @default(uuid())
+  tenantId         String       @map("tenant_id")
+  pointOfSaleId    String       @map("point_of_sale_id")
+  customerId       String       @map("customer_id")
+  idempotencyKey   String?      @map("idempotency_key")
+  correlationId    String?      @map("correlation_id")
+  voucherType      Int          @map("voucher_type")
+  concept          Int
+  currency         String       @default("PES")
+  exchangeRate     Decimal      @default(1) @map("exchange_rate") @db.Decimal(18, 6)
+  voucherNumber    Int?         @map("voucher_number")
+  voucherDate      String       @map("voucher_date")
+  serviceFromDate  String?      @map("service_from_date")
+  serviceToDate    String?      @map("service_to_date")
+  paymentDueDate   String?      @map("payment_due_date")
+  netAmount        Decimal      @map("net_amount") @db.Decimal(18, 2)
+  ivaAmount        Decimal      @map("iva_amount") @db.Decimal(18, 2)
+  otherTaxesAmount Decimal      @default(0) @map("other_taxes_amount") @db.Decimal(18, 2)
+  totalAmount      Decimal      @map("total_amount") @db.Decimal(18, 2)
+  status           FiscalStatus @default(draft)
+  rawRequest       String?      @map("raw_request") @db.Text
+  rawResponse      String?      @map("raw_response") @db.Text
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  tenant         Tenant               @relation(fields: [tenantId], references: [id])
+  pointOfSale    PointOfSale          @relation(fields: [pointOfSaleId], references: [id])
+  customer       Customer             @relation(fields: [customerId], references: [id])
+  items          FiscalDocumentItem[]
+  authorization  FiscalAuthorization?
+  events         FiscalEvent[]
+  generatedFiles GeneratedFile[]
+
+  @@unique([tenantId, pointOfSaleId, voucherType, voucherNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+  @@map("fiscal_documents")
+}
+
+model FiscalDocumentItem {
+  id               String  @id @default(uuid())
+  fiscalDocumentId String  @map("fiscal_document_id")
+  productCode      String? @map("product_code")
+  description      String
+  quantity         Decimal @db.Decimal(18, 4)
+  unitPrice        Decimal @map("unit_price") @db.Decimal(18, 2)
+  discount         Decimal @default(0) @db.Decimal(18, 2)
+  subtotal         Decimal @db.Decimal(18, 2)
+  ivaCode          Int     @map("iva_code")
+  ivaRate          Decimal @map("iva_rate") @db.Decimal(5, 2)
+  ivaAmount        Decimal @map("iva_amount") @db.Decimal(18, 2)
+  total            Decimal @db.Decimal(18, 2)
+
+  fiscalDocument FiscalDocument @relation(fields: [fiscalDocumentId], references: [id], onDelete: Cascade)
+
+  @@index([fiscalDocumentId])
+  @@map("fiscal_document_items")
+}
+
+model FiscalAuthorization {
+  id                String   @id @default(uuid())
+  fiscalDocumentId  String   @unique @map("fiscal_document_id")
+  cae               String
+  caeExpirationDate String   @map("cae_expiration_date")
+  voucherNumber     Int      @map("voucher_number")
+  observations      Json?
+  authorizedAt      DateTime @default(now()) @map("authorized_at")
+
+  fiscalDocument FiscalDocument @relation(fields: [fiscalDocumentId], references: [id])
+
+  @@map("fiscal_authorizations")
+}
+
+model FiscalEvent {
+  id               String         @id @default(uuid())
+  tenantId         String         @map("tenant_id")
+  fiscalDocumentId String?        @map("fiscal_document_id")
+  eventType        AuditEventType @map("event_type")
+  actor            String?
+  correlationId    String?        @map("correlation_id")
+  payload          Json?
+  errorMessage     String?        @map("error_message") @db.Text
+  errorStack       String?        @map("error_stack") @db.Text
+  occurredAt       DateTime       @default(now()) @map("occurred_at")
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id])
+  fiscalDocument FiscalDocument? @relation(fields: [fiscalDocumentId], references: [id])
+
+  @@index([fiscalDocumentId])
+  @@index([tenantId, occurredAt])
+  @@map("fiscal_events")
+}
+
+model TenantCertificate {
+  id                  String            @id @default(uuid())
+  tenantId            String            @map("tenant_id")
+  environment         FiscalEnvironment
+  certificatePem      String            @map("certificate_pem") @db.Text
+  encryptedPrivateKey String            @map("encrypted_private_key") @db.Text
+  expiresAt           DateTime          @map("expires_at")
+  isActive            Boolean           @default(true) @map("is_active")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, environment, isActive])
+  @@map("tenant_certificates")
+}
+
+model AccessTicket {
+  id          String            @id @default(uuid())
+  tenantId    String            @map("tenant_id")
+  environment FiscalEnvironment
+  service     String            @default("wsfev1")
+  token       String            @db.Text
+  sign        String            @db.Text
+  generatedAt DateTime          @map("generated_at")
+  expiresAt   DateTime          @map("expires_at")
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, environment, service])
+  @@index([tenantId, environment])
+  @@map("access_tickets")
+}
+
+model IdempotencyKey {
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  idempotencyKey   String   @map("idempotency_key")
+  fiscalDocumentId String   @map("fiscal_document_id")
+  responseStatus   Int      @map("response_status")
+  responseBody     String   @map("response_body") @db.Text
+  createdAt        DateTime @default(now()) @map("created_at")
+  expiresAt        DateTime @map("expires_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
+}
+
+model GeneratedFile {
+  id               String   @id @default(uuid())
+  fiscalDocumentId String   @map("fiscal_document_id")
+  fileType         String   @map("file_type")
+  content          String?  @db.Text
+  storageUrl       String?  @map("storage_url")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  fiscalDocument FiscalDocument @relation(fields: [fiscalDocumentId], references: [id])
+
+  @@index([fiscalDocumentId, fileType])
+  @@map("generated_files")
+}
