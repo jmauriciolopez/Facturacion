@@ -49,6 +49,8 @@ export interface FiscalDocument {
   rawRequest?: string;
   /** XML raw recibido de AFIP */
   rawResponse?: string;
+  /** Metadatos adicionales */
+  metadata?: Record<string, any>;
   createdAt: ISODateString;
   updatedAt: ISODateString;
 }

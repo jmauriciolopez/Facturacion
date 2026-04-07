@@ -9,5 +9,9 @@ export interface AccessTicketRepository {
     service: string,
   ): Promise<AccessTicket | null>;
   save(ticket: Omit<AccessTicket, 'id' | 'createdAt'>): Promise<AccessTicket>;
-  invalidate(tenantId: UUID, environment: FiscalEnvironment, service: string): Promise<void>;
+  invalidate(
+    tenantId: UUID,
+    environment: FiscalEnvironment,
+    service: string,
+  ): Promise<void>;
 }

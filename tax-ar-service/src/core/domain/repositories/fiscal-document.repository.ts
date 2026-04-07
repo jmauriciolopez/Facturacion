@@ -17,6 +17,11 @@ export interface FiscalDocumentRepository {
     filters: FiscalDocumentFilters,
     opts: PaginationOptions,
   ): Promise<PaginatedResult<FiscalDocument>>;
-  save(doc: Omit<FiscalDocument, 'id' | 'createdAt' | 'updatedAt' | 'items' | 'associatedVouchers'>): Promise<FiscalDocument>;
+  save(
+    doc: Omit<
+      FiscalDocument,
+      'id' | 'createdAt' | 'updatedAt' | 'items' | 'associatedVouchers'
+    >,
+  ): Promise<FiscalDocument>;
   update(id: UUID, data: Partial<FiscalDocument>): Promise<FiscalDocument>;
 }

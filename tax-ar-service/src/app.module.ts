@@ -3,6 +3,9 @@ import { ConfigModule } from '@nestjs/config';
 import { HealthModule } from './modules/health/health.module';
 import { ObservabilityModule } from './modules/observability/observability.module';
 import { FiscalModule } from './modules/fiscal/fiscal.module';
+import { TenantsModule } from './modules/tenants/tenants.module';
+import { DocumentsModule } from './modules/documents/documents.module';
+import { CertificatesModule } from './modules/certificates/certificates.module';
 import { PrismaModule } from './core/infrastructure/prisma/prisma.module';
 import appConfig from './modules/config/app.config';
 
@@ -17,6 +20,9 @@ import appConfig from './modules/config/app.config';
     ObservabilityModule,
     HealthModule,
     FiscalModule,
+    TenantsModule,
+    DocumentsModule,
+    CertificatesModule,
   ],
 })
 export class AppModule {}

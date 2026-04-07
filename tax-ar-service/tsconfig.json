@@ -18,7 +18,7 @@
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false,
     "typeRoots": ["./node_modules/@types"],
-    "types": ["node"],
+    "types": ["node", "jest"],
     "paths": {
       "@core/*": ["src/core/*"],
       "@modules/*": ["src/modules/*"]

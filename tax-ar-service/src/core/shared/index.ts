@@ -12,7 +12,10 @@ export type Result<T, E = string> =
   | { success: false; error: E };
 
 export const ok = <T>(data: T): Result<T> => ({ success: true, data });
-export const fail = <E = string>(error: E): Result<never, E> => ({ success: false, error });
+export const fail = <E = string>(error: E): Result<never, E> => ({
+  success: false,
+  error,
+});
 
 /** Paginación estándar */
 export interface PaginationOptions {

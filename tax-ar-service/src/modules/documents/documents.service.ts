@@ -1,0 +1,67 @@
+import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { CreateDocumentDto } from './dto/create-document.dto';
+import { REPOSITORY_TOKENS } from '../../core/domain/repositories/tokens';
+import { FiscalDocumentRepository } from '../../core/domain/repositories/fiscal-document.repository';
+import { UUID } from '../../core/shared';
+import { FiscalStatus } from '../../core/domain/enums';
+
+@Injectable()
+export class DocumentsService {
+  constructor(
+    @Inject(REPOSITORY_TOKENS.FISCAL_DOCUMENT)
+    private readonly documentRepo: FiscalDocumentRepository,
+  ) {}
+
+  async create(createDocumentDto: CreateDocumentDto) {
+    const { items, customer, ...rest } = createDocumentDto;
+
+    // Basic calculation of amounts from items
+    const netAmount = items.reduce(
+      (sum, item) => sum + item.quantity * item.unitPrice,
+      0,
+    );
+    const ivaAmount = items.reduce(
+      (sum, item) => {
+        const aliquot = item.ivaAliquotCode === 5 ? 0.21 : 0.105;
+        return sum + item.quantity * item.unitPrice * aliquot;
+      },
+      0,
+    );
+    const totalAmount = netAmount + ivaAmount;
+
+    return this.documentRepo.save({
+      ...rest,
+      customer: {
+        docType: customer.docType,
+        docNumber: customer.docNumber,
+        businessName: customer.businessName,
+        ivaCondition: customer.ivaCondition,
+        address: customer.address,
+        email: customer.email,
+      },
+      netAmount,
+      ivaAmount,
+      otherTaxesAmount: 0,
+      totalAmount,
+      status: FiscalStatus.DRAFT,
+      items: items.map((item) => ({
+        ...item,
+        discount: item.discount || 0,
+        subtotal: item.quantity * item.unitPrice,
+      })),
+      metadata: {},
+    } as any);
+  }
+
+  async findAll(tenantId: UUID) {
+    return this.documentRepo.findAll({ tenantId }, { page: 1, limit: 50 });
+  }
+
+  async findOne(id: UUID, tenantId: UUID) {
+    const doc = await this.documentRepo.findByIdAndTenant(id, tenantId);
+    if (!doc) {
+      throw new NotFoundException(`Document with ID ${id} not found`);
+    }
+    return doc;
+  }
+}
