@@ -32,3 +32,5 @@ Thumbs.db
 
 # Prisma shadow db
 .prisma/
+
+/generated/prisma

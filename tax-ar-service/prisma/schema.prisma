@@ -1,0 +1,315 @@
+// ============================================================
+// tax-ar-service — Prisma Schema
+// PostgreSQL · multi-tenant · fiscal argentino
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum FiscalEnvironment {
+  homologation
+  production
+}
+
+enum FiscalStatus {
+  draft
+  pending
+  authorized
+  rejected
+  error
+  cancelled
+}
+
+enum IvaCondition {
+  RI
+  MT
+  EX
+  CF
+  NR
+}
+
+enum AuditEventType {
+  document_created
+  document_validated
+  document_validation_failed
+  wsaa_token_requested
+  wsaa_token_refreshed
+  wsfev1_request_sent
+  wsfev1_response_received
+  document_authorized
+  document_rejected
+  document_error
+  retry_attempted
+  pdf_generated
+  qr_generated
+}
+
+enum CurrencyCode {
+  ARS
+  USD
+  EUR
+}
+
+// ============================================================
+// MODELS
+// ============================================================
+
+model Tenant {
+  id                String            @id @default(uuid())
+  name              String            @unique
+  clientCuit        String
+  apiKeyHash        String
+  isActive          Boolean           @default(true)
+  fiscalEnvironment FiscalEnvironment @default(homologation)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  fiscalProfiles     FiscalProfile[]
+  pointsOfSale       PointOfSale[]
+  documents          FiscalDocument[]
+  customers          CustomerFiscalData[]
+  accessTickets      AccessTicket[]
+  certificates       TenantCertificate[]
+  events             FiscalEvent[]
+  idempotencyRecords IdempotencyRecord[]
+  generatedFiles     GeneratedFile[]
+
+  @@index([clientCuit])
+}
+
+model FiscalProfile {
+  id                String       @id @default(uuid())
+  tenantId          String
+  tenant            Tenant       @relation(fields: [tenantId], references: [id])
+  // TODO: Evaluar restricción única de CUIT por sistema o por tenant a futuro
+  cuit              String
+  businessName      String
+  fantasyName       String?
+  ivaCondition      IvaCondition
+  address           String
+  city              String
+  province          String
+  zipCode           String
+  activityStartDate String // YYYYMMDD
+  isActive          Boolean      @default(true)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([tenantId])
+  @@index([cuit])
+}
+
+model PointOfSale {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  number      Int
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  FiscalDocument FiscalDocument[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId])
+}
+
+model CustomerFiscalData {
+  id           String       @id @default(uuid())
+  tenantId     String
+  tenant       Tenant       @relation(fields: [tenantId], references: [id])
+  docType      Int // AFIP codes (80, 86, etc.)
+  docNumber    String
+  businessName String
+  ivaCondition IvaCondition
+  address      String?
+  email        String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  documents FiscalDocument[]
+
+  @@index([tenantId])
+  @@index([docNumber])
+}
+
+model FiscalDocument {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  tenant             Tenant   @relation(fields: [tenantId], references: [id])
+  idempotencyKey     String?
+  correlationId      String?
+  pointOfSaleId      String
+  pointOfSale        PointOfSale @relation(fields: [pointOfSaleId], references: [id])
+  customerId         String
+  customer           CustomerFiscalData @relation(fields: [customerId], references: [id])
+  voucherType        Int // AFIP code
+  concept            Int // AFIP code
+  currency           CurrencyCode
+  exchangeRate       Decimal  @db.Decimal(15, 6)
+  voucherNumber      Int?
+  voucherDate        String // YYYYMMDD
+  serviceFromDate    String? // YYYYMMDD
+  serviceToDate      String? // YYYYMMDD
+  paymentDueDate     String? // YYYYMMDD
+  netAmount          Decimal  @db.Decimal(15, 2)
+  ivaAmount          Decimal  @db.Decimal(15, 2)
+  otherTaxesAmount   Decimal  @db.Decimal(15, 2)
+  totalAmount        Decimal  @db.Decimal(15, 2)
+  status             FiscalStatus @default(draft)
+  associatedVouchers Json? // AssociatedVoucher[]
+  rawRequest         String?  @db.Text
+  rawResponse        String?  @db.Text
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  items         FiscalDocumentItem[]
+  authorization FiscalAuthorization?
+  events        FiscalEvent[]
+  generatedFiles GeneratedFile[]
+
+  @@index([tenantId])
+  @@index([pointOfSaleId])
+  @@index([customerId])
+  @@index([voucherNumber])
+  @@index([idempotencyKey])
+}
+
+model FiscalDocumentItem {
+  id               String         @id @default(uuid())
+  fiscalDocumentId String
+  document         FiscalDocument @relation(fields: [fiscalDocumentId], references: [id])
+  productCode      String?
+  description      String
+  quantity         Decimal        @db.Decimal(15, 4)
+  unitPrice        Decimal        @db.Decimal(15, 4)
+  discount         Decimal        @db.Decimal(15, 2) @default(0)
+  subtotal         Decimal        @db.Decimal(15, 2)
+  ivaAliquotCode   Int
+  ivaAliquotRate   Decimal        @db.Decimal(5, 2)
+  ivaAmount        Decimal        @db.Decimal(15, 2)
+  total            Decimal        @db.Decimal(15, 2)
+
+  @@index([fiscalDocumentId])
+}
+
+model FiscalAuthorization {
+  id                String         @id @default(uuid())
+  fiscalDocumentId String         @unique
+  document         FiscalDocument @relation(fields: [fiscalDocumentId], references: [id])
+  cae               String
+  caeExpirationDate String // YYYYMMDD
+  voucherNumber     Int
+  observations      Json? // FiscalObservation[]
+  authorizedAt      DateTime       @default(now())
+
+  @@index([cae])
+}
+
+model AccessTicket {
+  id          String            @id @default(uuid())
+  tenantId    String
+  tenant      Tenant            @relation(fields: [tenantId], references: [id])
+  environment FiscalEnvironment
+  service     String
+  token       String            @db.Text
+  sign        String            @db.Text
+  generatedAt DateTime
+  expiresAt   DateTime
+  createdAt   DateTime          @default(now())
+  // TODO: Implementar política de retención para AccessTickets expirados
+
+  @@index([tenantId, environment, service])
+}
+
+model TenantCertificate {
+  id                  String            @id @default(uuid())
+  tenantId            String
+  tenant              Tenant            @relation(fields: [tenantId], references: [id])
+  environment         FiscalEnvironment
+  certificatePem      String            @db.Text
+  encryptedPrivateKey String            @db.Text
+  expiresAt           DateTime
+  isActive            Boolean           @default(true)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([tenantId, environment])
+}
+
+model FiscalEvent {
+  id               String         @id @default(uuid())
+  tenantId         String
+  tenant           Tenant         @relation(fields: [tenantId], references: [id])
+  fiscalDocumentId String?
+  document         FiscalDocument? @relation(fields: [fiscalDocumentId], references: [id])
+  eventType        AuditEventType
+  actor            String?
+  correlationId    String?
+  payload          Json?
+  errorMessage     String?        @db.Text
+  errorStack       String?        @db.Text
+  occurredAt       DateTime       @default(now())
+
+  @@index([tenantId])
+  @@index([fiscalDocumentId])
+  @@index([correlationId])
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(uuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
+  idempotencyKey String
+  method         String
+  path           String
+  statusCode     Int
+  responseBody   Json?
+  createdAt      DateTime @default(now())
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([createdAt])
+}
+
+model ParameterTableCache {
+  id          String   @id @default(uuid())
+  tableType   String   // e.g., 'voucher_type', 'iva_aliquot', 'currency'
+  code        String
+  description String
+  jsonData    Json?
+  lastSync    DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tableType, code])
+  @@index([tableType])
+}
+
+model GeneratedFile {
+  id               String         @id @default(uuid())
+  tenantId         String
+  tenant           Tenant         @relation(fields: [tenantId], references: [id])
+  fiscalDocumentId String?
+  document         FiscalDocument? @relation(fields: [fiscalDocumentId], references: [id])
+  fileType         String         // e.g., 'pdf', 'qr', 'xml'
+  fileName         String
+  storagePath      String
+  mimeType         String
+  sizeBytes        Int
+  checksum         String?
+  createdAt        DateTime       @default(now())
+
+  @@index([tenantId])
+  @@index([fiscalDocumentId])
+  @@index([fileType])
+}
