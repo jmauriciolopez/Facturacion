@@ -1,5 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { HealthModule } from './modules/health/health.module';
 import { ObservabilityModule } from './modules/observability/observability.module';
 import { FiscalModule } from './modules/fiscal/fiscal.module';
@@ -12,6 +13,8 @@ import { SecurityModule } from './core/infrastructure/security/security.module';
 import { AfipModule } from './core/infrastructure/afip/afip.module';
 import { SharedModule } from './core/shared/shared.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { CorrelationIdMiddleware } from './core/infrastructure/logging/correlation-id.middleware';
+import { LoggerInterceptor } from './core/shared/logging/logger.interceptor';
 import appConfig from './modules/config/app.config';
 
 @Module({
@@ -32,6 +35,17 @@ import appConfig from './modules/config/app.config';
     TenantsModule,
     DocumentsModule,
     CertificatesModule,
+    MaintenanceModule,
+  ],
+  providers: [
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: LoggerInterceptor,
+    },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+  }
+}

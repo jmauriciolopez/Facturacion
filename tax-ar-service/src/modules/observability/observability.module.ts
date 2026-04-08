@@ -1,13 +1,21 @@
 import { Module, Global } from '@nestjs/common';
-import { LoggerService } from './logger.service';
+import { LoggerModule } from 'nestjs-pino';
 
-/**
- * Global: el LoggerService queda disponible en toda la app
- * sin necesidad de importar ObservabilityModule en cada módulo.
- */
 @Global()
 @Module({
-  providers: [LoggerService],
-  exports: [LoggerService],
+  imports: [
+    LoggerModule.forRoot({
+      pinoHttp: {
+        level: process.env.NODE_ENV !== 'production' ? 'debug' : 'info',
+        transport: process.env.NODE_ENV !== 'production' 
+          ? { target: 'pino-pretty', options: { colorize: true } } 
+          : undefined,
+        customProps: () => ({
+          service: 'tax-ar-service',
+        }),
+      },
+    }),
+  ],
+  exports: [LoggerModule],
 })
 export class ObservabilityModule {}

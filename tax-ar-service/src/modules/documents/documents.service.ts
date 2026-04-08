@@ -12,6 +12,7 @@ import { FiscalValidationService } from '../fiscal/fiscal-validation.service';
 import { AuditService } from '../fiscal/audit.service';
 import { AuditEventType } from '../../core/domain/enums';
 import { UIMapperService } from './ui-mapper.service';
+import { QrService, QrDocumentData } from '../qr/qr.service';
 
 @Injectable()
 export class DocumentsService {
@@ -25,6 +26,7 @@ export class DocumentsService {
     private readonly fiscalValidator: FiscalValidationService,
     private readonly audit: AuditService,
     private readonly uiMapper: UIMapperService,
+    private readonly qrService: QrService,
   ) {}
 
   async getPdf(id: UUID, tenantId: UUID): Promise<Buffer> {
@@ -53,6 +55,30 @@ export class DocumentsService {
       document,
       document.authorization,
     );
+  }
+
+  async getQrCode(id: UUID, tenantId: UUID): Promise<string> {
+    const document = await this.prisma.fiscalDocument.findUnique({
+      where: { id },
+      include: {
+        pointOfSale: true,
+        customer: true,
+        authorization: true,
+        tenant: { include: { fiscalProfile: true } },
+      },
+    }) as unknown as QrDocumentData;
+
+    if (!document || (document as any).tenantId !== tenantId) {
+      throw new NotFoundException(`Document with ID ${id} not found`);
+    }
+
+    if (!document.authorization) {
+      throw new NotFoundException(
+        `Document with ID ${id} is not authorized. Cannot generate QR.`,
+      );
+    }
+
+    return this.qrService.generateQrDataUrl(document);
   }
 
   async authorize(id: UUID, tenantId: UUID) {

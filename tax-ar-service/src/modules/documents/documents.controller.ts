@@ -111,6 +111,18 @@ export class FiscalDocumentsController {
   }
 
   @Version('1')
+  @Get(':id/qr')
+  @ApiOperation({ summary: 'Get QR Data URL for an authorized document' })
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
+  async getQr(
+    @Param('id', ParseUUIDPipe) id: UUID,
+    @CurrentTenant() tenantId: UUID,
+  ) {
+    const qrDataUrl = await this.documentsService.getQrCode(id, tenantId);
+    return { qrDataUrl };
+  }
+
+  @Version('1')
   @Get()
   @ApiOperation({ summary: 'Search and list fiscal documents' })
   @ApiQuery({ name: 'status', required: false })

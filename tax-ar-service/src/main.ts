@@ -1,13 +1,12 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe, VersioningType, Logger } from '@nestjs/common';
+import { ValidationPipe, VersioningType } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule, {
-    logger: ['log', 'error', 'warn', 'debug', 'verbose'],
-  });
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  app.useLogger(app.get(Logger));
 
   // Global Prefix for all routes: /api/...
   app.setGlobalPrefix('api');
@@ -43,8 +42,9 @@ async function bootstrap() {
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
 
-  logger.log(`[tax-ar-service] Running on: http://localhost:${port}/api/v1`);
-  logger.log(
+  const startupLogger = app.get(Logger);
+  startupLogger.log(`[tax-ar-service] Running on: http://localhost:${port}/api/v1`);
+  startupLogger.log(
     `[tax-ar-service] Swagger Docs: http://localhost:${port}/api/docs`,
   );
 }

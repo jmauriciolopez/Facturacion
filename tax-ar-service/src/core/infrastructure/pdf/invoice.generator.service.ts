@@ -1,26 +1,53 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as puppeteer from 'puppeteer';
 import * as handlebars from 'handlebars';
-import * as qrcode from 'qrcode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { FiscalDocument, FiscalAuthorization } from '@prisma/client';
+import { FiscalAuthorization } from '@prisma/client';
+import { QrService, QrDocumentData } from '../../../modules/qr/qr.service';
 
 @Injectable()
 export class InvoiceGeneratorService {
   private readonly logger = new Logger(InvoiceGeneratorService.name);
 
+  constructor(private readonly qrService: QrService) {}
+
   /**
-   * Generates a premium PDF for a fiscal document, including the AFIP QR code.
+   * Generates a premium PDF for a fiscal document, including the ARCA QR code.
    */
   async generateInvoicePdf(
-    document: any, // Using any to access relations like pointOfSale, customer, profile
+    document: any, // Joined data from DocumentsService
     authorization: FiscalAuthorization,
   ): Promise<Buffer> {
-    this.logger.log(`Generating PDF for document ${document.id}`);
+    const docId = String(document.id);
+    this.logger.log(`Generating PDF for document ${docId}`);
 
-    // 1. Generate QR Code
-    const qrImage = await this.generateAfipQr(document, authorization);
+    // Adjust data for QR service interface mapping
+    const qrData: QrDocumentData = {
+      id: docId,
+      date: new Date(String(document.voucherDate).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3')),
+      pointOfSale: { number: Number(document.pointOfSale.number) },
+      documentType: Number(document.voucherType),
+      documentNumber: Number(document.voucherNumber),
+      totalAmount: parseFloat(String(document.totalAmount)),
+      currency: String(document.currency),
+      exchangeRate: parseFloat(String(document.exchangeRate)),
+      customer: {
+        docType: Number(document.customer.docType),
+        docNumber: String(document.customer.docNumber),
+      },
+      authorization: {
+        cae: String(authorization.cae),
+      },
+      tenant: {
+        fiscalProfile: {
+          cuit: String(document.tenant.clientCuit),
+        },
+      },
+    };
+
+    // 1. Generate QR Code via dedicated service
+    const qrImage = await this.qrService.generateQrDataUrl(qrData);
 
     // 2. Prepare Template Data
     const templateData = this.prepareTemplateData(document, authorization, qrImage);
@@ -32,69 +59,45 @@ export class InvoiceGeneratorService {
     return this.convertToPdf(html);
   }
 
-  /**
-   * Generates the AFIP compliant QR code image in Base64.
-   */
-  private async generateAfipQr(document: any, authorization: FiscalAuthorization): Promise<string> {
-    const qrData = {
-      ver: 1,
-      fecha: document.voucherDate.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3'), // YYYY-MM-DD
-      cuit: parseInt(document.tenant.clientCuit),
-      ptoVta: document.pointOfSale.number,
-      tipoCmp: document.voucherType,
-      nroCmp: document.voucherNumber,
-      importe: parseFloat(document.totalAmount.toString()),
-      moneda: document.currency === 'ARS' ? 'PES' : 'DOL',
-      ctz: parseFloat(document.exchangeRate.toString()) || 1,
-      tipoDocRec: document.customer.docType,
-      nroDocRec: parseInt(document.customer.docNumber),
-      tipoCodAut: 'E', // CAE
-      codAut: parseInt(authorization.cae),
-    };
-
-    const payload = Buffer.from(JSON.stringify(qrData)).toString('base64');
-    const url = `https://www.arca.gob.ar/fe/qr/?p=${payload}`;
-
-    return qrcode.toDataURL(url);
-  }
-
   private prepareTemplateData(document: any, authorization: FiscalAuthorization, qrImage: string) {
+    const posNumber = Number(document.pointOfSale.number).toString().padStart(5, '0');
+    const voucherNumber = Number(document.voucherNumber).toString().padStart(8, '0');
+    
     return {
       company: {
-        name: document.tenant.name,
-        cuit: document.tenant.clientCuit,
-        address: document.pointOfSale.description || 'S/D', // Placeholder or use FiscalProfile
-        // Add more from FiscalProfile if available in relations
+        name: String(document.tenant.name),
+        cuit: String(document.tenant.clientCuit),
+        address: String(document.pointOfSale.description || 'S/D'),
       },
       document: {
-        type: this.getVoucherTypeText(document.voucherType),
-        typeCode: document.voucherType.toString().padStart(2, '0'),
-        number: `${document.pointOfSale.number.toString().padStart(5, '0')}-${document.voucherNumber.toString().padStart(8, '0')}`,
-        date: document.voucherDate.replace(/(\d{4})(\d{2})(\d{2})/, '$3/$2/$1'),
-        cae: authorization.cae,
-        caeVto: authorization.caeExpirationDate.replace(/(\d{4})(\d{2})(\d{2})/, '$3/$2/$1'),
+        type: this.getVoucherTypeText(Number(document.voucherType)),
+        typeCode: Number(document.voucherType).toString().padStart(2, '0'),
+        number: `${posNumber}-${voucherNumber}`,
+        date: String(document.voucherDate).replace(/(\d{4})(\d{2})(\d{2})/, '$3/$2/$1'),
+        cae: String(authorization.cae),
+        caeVto: String(authorization.caeExpirationDate).replace(/(\d{4})(\d{2})(\d{2})/, '$3/$2/$1'),
         qrImage,
       },
       customer: {
-        name: document.customer.businessName,
-        docType: this.getDocTypeText(document.customer.docType),
-        docNumber: document.customer.docNumber,
-        ivaCondition: document.customer.ivaCondition,
-        address: document.customer.address,
+        name: String(document.customer.businessName),
+        docType: this.getDocTypeText(Number(document.customer.docType)),
+        docNumber: String(document.customer.docNumber),
+        ivaCondition: String(document.customer.ivaCondition),
+        address: String(document.customer.address || ''),
       },
       items: document.items.map((item: any) => ({
-        description: item.description,
-        quantity: parseFloat(item.quantity.toString()),
-        unitPrice: parseFloat(item.unitPrice.toString()),
-        ivaRate: `${parseFloat(item.ivaAliquotRate.toString())}%`,
-        subtotal: parseFloat(item.subtotal.toString()),
-        total: parseFloat(item.total.toString()),
+        description: String(item.description),
+        quantity: parseFloat(String(item.quantity)),
+        unitPrice: parseFloat(String(item.unitPrice)),
+        ivaRate: `${parseFloat(String(item.ivaAliquotRate))}%`,
+        subtotal: parseFloat(String(item.subtotal)),
+        total: parseFloat(String(item.total)),
       })),
       totals: {
-        net: parseFloat(document.netAmount.toString()),
-        iva: parseFloat(document.ivaAmount.toString()),
-        total: parseFloat(document.totalAmount.toString()),
-        currency: document.currency,
+        net: parseFloat(String(document.netAmount)),
+        iva: parseFloat(String(document.ivaAmount)),
+        total: parseFloat(String(document.totalAmount)),
+        currency: String(document.currency),
       },
     };
   }
