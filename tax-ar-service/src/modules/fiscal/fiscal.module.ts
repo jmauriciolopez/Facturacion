@@ -1,21 +1,12 @@
 import { Module } from '@nestjs/common';
+import { CatalogsService } from './catalogs.service';
+import { FiscalValidationService } from './fiscal-validation.service';
+import { PrismaModule } from '../../core/infrastructure/prisma/prisma.module';
 
-/**
- * Módulo fiscal principal.
- * A medida que avancen las etapas, este módulo importará:
- * - TenantsModule
- * - CertificatesModule
- * - DocumentsModule
- * - WsaaModule
- * - Wsfev1Module
- * - AuditModule
- * - QrModule
- * - PdfModule
- */
 @Module({
-  imports: [],
+  imports: [PrismaModule],
   controllers: [],
-  providers: [],
-  exports: [],
+  providers: [CatalogsService, FiscalValidationService],
+  exports: [CatalogsService, FiscalValidationService],
 })
 export class FiscalModule {}

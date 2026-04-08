@@ -7,6 +7,8 @@ import { FiscalStatus } from '../../core/domain/enums';
 import { WsfeService } from '../../core/infrastructure/afip/wsfe.service';
 import { InvoiceGeneratorService } from '../../core/infrastructure/pdf/invoice.generator.service';
 import { PrismaService } from '../../core/infrastructure/prisma/prisma.service';
+import { CatalogsService } from '../fiscal/catalogs.service';
+import { FiscalValidationService } from '../fiscal/fiscal-validation.service';
 
 @Injectable()
 export class DocumentsService {
@@ -16,6 +18,8 @@ export class DocumentsService {
     private readonly wsfe: WsfeService,
     private readonly pdfGenerator: InvoiceGeneratorService,
     private readonly prisma: PrismaService,
+    private readonly catalogs: CatalogsService,
+    private readonly fiscalValidator: FiscalValidationService,
   ) {}
 
   async getPdf(id: UUID, tenantId: UUID): Promise<Buffer> {
@@ -55,20 +59,34 @@ export class DocumentsService {
   }
 
   async create(createDocumentDto: CreateDocumentDto) {
+    // 1. Pre-validation
+    await this.fiscalValidator.validateCreate(createDocumentDto);
+
     const { items, customer, ...rest } = createDocumentDto;
 
-    // Basic calculation of amounts from items
-    const netAmount = items.reduce(
-      (sum, item) => sum + item.quantity * item.unitPrice,
-      0,
+    // 2. Calculation of amounts using Catalogs
+    let netAmount = 0;
+    let ivaAmount = 0;
+
+    const itemsWithTotals = await Promise.all(
+      items.map(async (item) => {
+        const rate = await this.catalogs.getIvaRate(
+          item.ivaAliquotCode.toString(),
+        );
+        const itemNet = item.quantity * item.unitPrice;
+        const itemIva = itemNet * rate;
+        
+        netAmount += itemNet;
+        ivaAmount += itemIva;
+
+        return {
+          ...item,
+          discount: item.discount || 0,
+          subtotal: itemNet,
+        };
+      }),
     );
-    const ivaAmount = items.reduce(
-      (sum, item) => {
-        const aliquot = item.ivaAliquotCode === 5 ? 0.21 : 0.105;
-        return sum + item.quantity * item.unitPrice * aliquot;
-      },
-      0,
-    );
+
     const totalAmount = netAmount + ivaAmount;
 
     return this.documentRepo.save({
@@ -86,11 +104,7 @@ export class DocumentsService {
       otherTaxesAmount: 0,
       totalAmount,
       status: FiscalStatus.DRAFT,
-      items: items.map((item) => ({
-        ...item,
-        discount: item.discount || 0,
-        subtotal: item.quantity * item.unitPrice,
-      })),
+      items: itemsWithTotals,
       metadata: {},
     } as any);
   }

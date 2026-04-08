@@ -2,6 +2,7 @@ import { Controller, Get } from '@nestjs/common';
 import {
   HealthCheck,
   HealthCheckService,
+  HttpHealthIndicator,
   MemoryHealthIndicator,
   PrismaHealthIndicator,
 } from '@nestjs/terminus';
@@ -13,6 +14,7 @@ export class HealthController {
     private readonly health: HealthCheckService,
     private readonly memory: MemoryHealthIndicator,
     private readonly prismaHealth: PrismaHealthIndicator,
+    private readonly http: HttpHealthIndicator,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -28,6 +30,11 @@ export class HealthController {
     return this.health.check([
       () => this.memory.checkHeap('memory_heap', 512 * 1024 * 1024),
       () => this.prismaHealth.pingCheck('database', this.prisma),
+      () =>
+        this.http.pingCheck(
+          'afip_wsaa',
+          'https://wsaahomo.afip.gov.ar/ws/services/LoginCms?WSDL',
+        ),
     ]);
   }
 
@@ -37,6 +44,11 @@ export class HealthController {
     return this.health.check([
       () => this.memory.checkHeap('memory_heap', 512 * 1024 * 1024),
       () => this.prismaHealth.pingCheck('database', this.prisma),
+      () =>
+        this.http.pingCheck(
+          'afip_wsaa',
+          'https://wsaahomo.afip.gov.ar/ws/services/LoginCms?WSDL',
+        ),
     ]);
   }
 }

@@ -3,9 +3,10 @@ import { FiscalDocumentsController } from './documents.controller';
 import { DocumentsService } from './documents.service';
 import { AfipModule } from '../../core/infrastructure/afip/afip.module';
 import { PdfModule } from '../../core/infrastructure/pdf/pdf.module';
+import { FiscalModule } from '../fiscal/fiscal.module';
 
 @Module({
-  imports: [AfipModule, PdfModule],
+  imports: [AfipModule, PdfModule, FiscalModule],
   controllers: [FiscalDocumentsController],
   providers: [DocumentsService],
 })
