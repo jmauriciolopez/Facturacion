@@ -6,10 +6,12 @@ import { FiscalModule } from './modules/fiscal/fiscal.module';
 import { TenantsModule } from './modules/tenants/tenants.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { CertificatesModule } from './modules/certificates/certificates.module';
+import { MaintenanceModule } from './modules/maintenance/maintenance.module';
 import { PrismaModule } from './core/infrastructure/prisma/prisma.module';
 import { SecurityModule } from './core/infrastructure/security/security.module';
 import { AfipModule } from './core/infrastructure/afip/afip.module';
 import { SharedModule } from './core/shared/shared.module';
+import { ScheduleModule } from '@nestjs/schedule';
 import appConfig from './modules/config/app.config';
 
 @Module({
@@ -19,6 +21,7 @@ import appConfig from './modules/config/app.config';
       load: [appConfig],
       envFilePath: ['.env.local', '.env'],
     }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     SecurityModule,
     AfipModule,

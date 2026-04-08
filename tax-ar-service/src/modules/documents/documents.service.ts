@@ -182,8 +182,8 @@ export class DocumentsService {
     }
 
     const events = await this.prisma.fiscalEvent.findMany({
-      where: { documentId: id },
-      orderBy: { timestamp: 'desc' },
+      where: { fiscalDocumentId: id },
+      orderBy: { occurredAt: 'desc' },
     });
 
     return {
