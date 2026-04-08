@@ -11,6 +11,7 @@ import { CatalogsService } from '../fiscal/catalogs.service';
 import { FiscalValidationService } from '../fiscal/fiscal-validation.service';
 import { AuditService } from '../fiscal/audit.service';
 import { AuditEventType } from '../../core/domain/enums';
+import { UIMapperService } from './ui-mapper.service';
 
 @Injectable()
 export class DocumentsService {
@@ -23,6 +24,7 @@ export class DocumentsService {
     private readonly catalogs: CatalogsService,
     private readonly fiscalValidator: FiscalValidationService,
     private readonly audit: AuditService,
+    private readonly uiMapper: UIMapperService,
   ) {}
 
   async getPdf(id: UUID, tenantId: UUID): Promise<Buffer> {
@@ -165,7 +167,16 @@ export class DocumentsService {
     if (!doc) {
       throw new NotFoundException(`Document with ID ${id} not found`);
     }
-    return doc;
+
+    const uiContext = this.uiMapper.getUIContext(
+      doc.status as FiscalStatus,
+      doc.metadata?.lastAfipResponse || doc.metadata?.error,
+    );
+
+    return {
+      ...doc,
+      uiContext,
+    };
   }
 
   /**
