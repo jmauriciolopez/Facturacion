@@ -5,6 +5,8 @@ import { FiscalDocumentRepository } from '../../core/domain/repositories/fiscal-
 import { UUID } from '../../core/shared';
 import { FiscalStatus } from '../../core/domain/enums';
 import { WsfeService } from '../../core/infrastructure/afip/wsfe.service';
+import { InvoiceGeneratorService } from '../../core/infrastructure/pdf/invoice.generator.service';
+import { PrismaService } from '../../core/infrastructure/prisma/prisma.service';
 
 @Injectable()
 export class DocumentsService {
@@ -12,7 +14,37 @@ export class DocumentsService {
     @Inject(REPOSITORY_TOKENS.FISCAL_DOCUMENT)
     private readonly documentRepo: FiscalDocumentRepository,
     private readonly wsfe: WsfeService,
+    private readonly pdfGenerator: InvoiceGeneratorService,
+    private readonly prisma: PrismaService,
   ) {}
+
+  async getPdf(id: UUID, tenantId: UUID): Promise<Buffer> {
+    const document = await this.prisma.fiscalDocument.findUnique({
+      where: { id: id as any },
+      include: {
+        pointOfSale: true,
+        customer: true,
+        items: true,
+        tenant: true,
+        authorization: true,
+      },
+    });
+
+    if (!document || document.tenantId !== tenantId) {
+      throw new NotFoundException(`Document with ID ${id} not found`);
+    }
+
+    if (!document.authorization) {
+      throw new NotFoundException(
+        `Document with ID ${id} is not authorized yet`,
+      );
+    }
+
+    return this.pdfGenerator.generateInvoicePdf(
+      document,
+      document.authorization,
+    );
+  }
 
   async authorize(id: UUID, tenantId: UUID) {
     // 1. Verify existence and tenant

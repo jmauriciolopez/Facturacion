@@ -7,7 +7,9 @@ import {
   Version,
   ParseUUIDPipe,
   UseGuards,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -88,8 +90,18 @@ export class FiscalDocumentsController {
   @ApiOperation({
     summary: 'Get PDF representation of the authorized document',
   })
-  getPdf(@Param('id', ParseUUIDPipe) id: UUID) {
-    return { message: 'Streaming PDF for document ' + id };
+  async getPdf(
+    @Param('id', ParseUUIDPipe) id: UUID,
+    @CurrentTenant() tenantId: UUID,
+    @Res() res: Response,
+  ) {
+    const buffer = await this.documentsService.getPdf(id, tenantId);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename=comprobante-${id}.pdf`,
+      'Content-Length': buffer.length,
+    });
+    res.send(buffer);
   }
 
   @Version('1')

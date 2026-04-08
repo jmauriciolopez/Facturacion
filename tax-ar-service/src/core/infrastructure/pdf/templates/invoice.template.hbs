@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        
+        :root {
+            --primary: #1a1a1a;
+            --secondary: #4a4a4a;
+            --accent: #0066cc;
+            --border: #e0e0e0;
+            --bg-light: #f9f9f9;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            color: var(--primary);
+            font-size: 10px;
+            line-height: 1.4;
+        }
+
+        .container {
+            padding: 40px;
+            background: white;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .voucher-type-box {
+            position: absolute;
+            left: 50%;
+            top: 0;
+            transform: translateX(-50%);
+            border: 2px solid var(--primary);
+            width: 40px;
+            height: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            z-index: 10;
+        }
+
+        .voucher-type-box span {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .voucher-type-box small {
+            font-size: 8px;
+            font-weight: 600;
+        }
+
+        .company-info {
+            width: 45%;
+        }
+
+        .company-name {
+            font-size: 18px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin: 0;
+        }
+
+        .document-info {
+            width: 45%;
+            text-align: right;
+        }
+
+        .document-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .section {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: var(--bg-light);
+            border-radius: 4px;
+        }
+
+        .section-column {
+            width: 48%;
+        }
+
+        .section-title {
+            font-size: 8px;
+            font-weight: 700;
+            color: var(--secondary);
+            text-transform: uppercase;
+            margin-bottom: 4px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 30px;
+        }
+
+        th {
+            background: var(--primary);
+            color: white;
+            padding: 8px;
+            text-align: left;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 8px;
+        }
+
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .text-right { text-align: right; }
+        .font-bold { font-weight: 700; }
+
+        .totals-container {
+            display: flex;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .totals-table {
+            width: 250px;
+        }
+
+        .totals-table td {
+            padding: 5px 8px;
+            border: none;
+        }
+
+        .total-row {
+            background: var(--bg-light);
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .footer {
+            margin-top: 50px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 20px;
+            border-top: 1px dashed var(--border);
+        }
+
+        .qr-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .qr-code {
+            width: 80px;
+            height: 80px;
+        }
+
+        .cae-info {
+            text-align: right;
+        }
+
+        .cae-label {
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        .cae-value {
+            font-size: 12px;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="voucher-type-box">
+                <span>{{document.typeCode}}</span>
+                <small>COD.</small>
+            </div>
+            
+            <div class="company-info">
+                <h1 class="company-name">{{company.name}}</h1>
+                <p>CUIT: {{company.cuit}}</p>
+                <p>{{company.address}}</p>
+            </div>
+
+            <div class="document-info">
+                <div class="document-title">{{document.type}}</div>
+                <p><span class="font-bold">Nro:</span> {{document.number}}</p>
+                <p><span class="font-bold">Fecha:</span> {{document.date}}</p>
+            </div>
+        </header>
+
+        <div class="section">
+            <div class="section-column">
+                <div class="section-title">Receptor</div>
+                <p class="font-bold" style="font-size: 12px;">{{customer.name}}</p>
+                <p>{{customer.ivaCondition}}</p>
+                <p>{{customer.docType}}: {{customer.docNumber}}</p>
+            </div>
+            <div class="section-column">
+                <div class="section-title">Dirección / Contacto</div>
+                <p>{{customer.address}}</p>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 50%;">Descripción</th>
+                    <th class="text-right">Cant.</th>
+                    <th class="text-right">Precio Unit.</th>
+                    <th class="text-right">IVA</th>
+                    <th class="text-right">Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{#each items}}
+                <tr>
+                    <td>{{this.description}}</td>
+                    <td class="text-right">{{this.quantity}}</td>
+                    <td class="text-right">$ {{this.unitPrice}}</td>
+                    <td class="text-right">{{this.ivaRate}}</td>
+                    <td class="text-right">$ {{this.total}}</td>
+                </tr>
+                {{/each}}
+            </tbody>
+        </table>
+
+        <div class="totals-container">
+            <table class="totals-table">
+                <tr>
+                    <td>Subtotal Neto:</td>
+                    <td class="text-right">$ {{totals.net}}</td>
+                </tr>
+                <tr>
+                    <td>IVA:</td>
+                    <td class="text-right">$ {{totals.iva}}</td>
+                </tr>
+                <tr class="total-row">
+                    <td>TOTAL:</td>
+                    <td class="text-right">{{totals.currency}} $ {{totals.total}}</td>
+                </tr>
+            </table>
+        </div>
+
+        <footer class="footer">
+            <div class="qr-section">
+                <img src="{{document.qrImage}}" alt="QR AFIP" class="qr-code">
+                <div style="font-size: 7px; color: var(--secondary);">
+                    Escanee este código para verificar <br> la validez fiscal del comprobante.
+                </div>
+            </div>
+            
+            <div class="cae-info">
+                <div>
+                    <span class="cae-label">CAE N°: </span>
+                    <span class="cae-value font-bold">{{document.cae}}</span>
+                </div>
+                <div>
+                    <span class="cae-label">Vto. CAE: </span>
+                    <span class="cae-value">{{document.caeVto}}</span>
+                </div>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>
