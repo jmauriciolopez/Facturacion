@@ -29,7 +29,7 @@ export class DocumentsService {
 
   async getPdf(id: UUID, tenantId: UUID): Promise<Buffer> {
     const document = await this.prisma.fiscalDocument.findUnique({
-      where: { id: id as any },
+      where: { id },
       include: {
         pointOfSale: true,
         customer: true,
@@ -58,7 +58,7 @@ export class DocumentsService {
   async authorize(id: UUID, tenantId: UUID) {
     // 1. Verify existence and tenant
     const document = await this.prisma.fiscalDocument.findUnique({
-      where: { id: id as any },
+      where: { id },
       include: { authorization: true },
     });
 
@@ -131,27 +131,30 @@ export class DocumentsService {
     const document = await this.documentRepo.save({
       ...rest,
       idempotencyKey,
-      customer: {
-        docType: customer.docType,
-        docNumber: customer.docNumber,
-        businessName: customer.businessName,
-        ivaCondition: customer.ivaCondition,
-        address: customer.address,
-        email: customer.email,
-      },
+      customerId: customer.docNumber, // Assuming docNumber maps to customerId for now, or fetch actual ID
+      exchangeRate: rest.exchangeRate || 1,
       netAmount,
       ivaAmount,
       otherTaxesAmount: 0,
       totalAmount,
       status: FiscalStatus.DRAFT,
-      items: itemsWithTotals,
+      items: itemsWithTotals.map(item => ({
+        ...item,
+        ivaAliquot: {
+          code: item.ivaAliquotCode,
+          description: `${item.ivaAliquotCode}%`, 
+          rate: item.ivaAliquotCode / 100
+        },
+        ivaAmount: item.subtotal * (item.ivaAliquotCode / 100),
+        total: item.subtotal * (1 + item.ivaAliquotCode / 100)
+      })),
       metadata: {},
-    } as any);
+    });
 
     // 5. Audit creation
     await this.audit.recordEvent({
       tenantId: rest.tenantId,
-      fiscalDocumentId: (document as { id: string }).id,
+      fiscalDocumentId: document.id,
       eventType: AuditEventType.DOCUMENT_CREATED,
     });
 
@@ -169,7 +172,7 @@ export class DocumentsService {
     }
 
     const uiContext = this.uiMapper.getUIContext(
-      doc.status as FiscalStatus,
+      doc.status,
       doc.metadata?.lastAfipResponse || doc.metadata?.error,
     );
 

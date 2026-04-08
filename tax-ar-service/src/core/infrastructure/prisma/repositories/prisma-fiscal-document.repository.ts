@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
-import { FiscalDocumentRepository, FiscalDocumentFilters } from '../../../domain/repositories/fiscal-document.repository';
+import { FiscalDocumentRepository, FiscalDocumentFilters, CreateFiscalDocumentItemData } from '../../../domain/repositories/fiscal-document.repository';
 import { FiscalDocument } from '../../../domain/fiscal-document.entity';
 import { UUID, PaginationOptions, PaginatedResult } from '../../../shared';
 
@@ -68,31 +68,34 @@ export class PrismaFiscalDocumentRepository implements FiscalDocumentRepository 
   }
 
   async save(
-    doc: Omit<FiscalDocument, 'id' | 'createdAt' | 'updatedAt' | 'items' | 'associatedVouchers'>
+    doc: Omit<
+      FiscalDocument,
+      'id' | 'createdAt' | 'updatedAt' | 'items' | 'associatedVouchers'
+    > & {
+      items: CreateFiscalDocumentItemData[];
+    },
   ): Promise<FiscalDocument> {
+    const { items, ...rest } = doc;
+
     const record = await this.prisma.fiscalDocument.create({
       data: {
-        tenantId: doc.tenantId,
-        pointOfSaleId: doc.pointOfSaleId,
-        customerId: doc.customerId,
-        voucherType: doc.voucherType as number,
-        concept: doc.concept as number,
-        status: doc.status as any,
-        currency: (doc.currency === 'PES' ? 'ARS' : doc.currency === 'DOL' ? 'USD' : doc.currency === '060' ? 'EUR' : 'ARS') as any,
-        exchangeRate: doc.exchangeRate as any,
-        voucherDate: doc.voucherDate,
-        serviceFromDate: doc.serviceFromDate,
-        serviceToDate: doc.serviceToDate,
-        paymentDueDate: doc.paymentDueDate,
-        netAmount: doc.netAmount,
-        ivaAmount: doc.ivaAmount,
-        otherTaxesAmount: doc.otherTaxesAmount,
-        totalAmount: doc.totalAmount as any,
-        idempotencyKey: doc.idempotencyKey,
-        correlationId: doc.correlationId,
+        ...rest,
+        items: items
+          ? {
+              create: items.map((item) => ({
+                ivaAliquotCode: item.ivaAliquot.code,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                description: item.description,
+                discount: item.discount,
+                subtotal: item.subtotal,
+              })),
+            }
+          : undefined,
       },
+      include: { items: true },
     });
-    
+
     return record as unknown as FiscalDocument;
   }
 

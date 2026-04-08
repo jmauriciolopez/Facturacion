@@ -10,6 +10,11 @@ export interface FiscalDocumentFilters {
   to?: string;
 }
 
+export type CreateFiscalDocumentItemData = Omit<
+  FiscalDocument['items'][number],
+  'id' | 'fiscalDocumentId'
+>;
+
 export interface FiscalDocumentRepository {
   findById(id: UUID): Promise<FiscalDocument | null>;
   findByIdAndTenant(id: UUID, tenantId: UUID): Promise<FiscalDocument | null>;
@@ -21,7 +26,9 @@ export interface FiscalDocumentRepository {
     doc: Omit<
       FiscalDocument,
       'id' | 'createdAt' | 'updatedAt' | 'items' | 'associatedVouchers'
-    >,
+    > & {
+      items: CreateFiscalDocumentItemData[];
+    },
   ): Promise<FiscalDocument>;
   update(id: UUID, data: Partial<FiscalDocument>): Promise<FiscalDocument>;
 }
