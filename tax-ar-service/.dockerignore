@@ -1,0 +1,14 @@
+node_modules
+dist
+npm-debug.log
+.git
+.env
+Dockerfile
+docker-compose.yml
+README.md
+.prettierrc
+eslint.config.mjs
+nest-cli.json
+tsconfig.build.json
+tsconfig.json
+test
