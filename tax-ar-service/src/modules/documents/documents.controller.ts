@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   UseGuards,
   Res,
+  UseInterceptors,
 } from '@nestjs/common';
 import { Response } from 'express';
 import {
@@ -23,6 +24,7 @@ import { DocumentsService } from './documents.service';
 import { UUID } from '../../core/shared';
 import { TenantGuard } from '../../core/infrastructure/security/guards/tenant.guard';
 import { CurrentTenant } from '../../core/infrastructure/security/decorators/current-tenant.decorator';
+import { IdempotencyInterceptor } from '../../core/shared/idempotency/idempotency.interceptor';
 
 @ApiTags('Fiscal Documents')
 @ApiHeader({
@@ -36,6 +38,7 @@ export class FiscalDocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
 
   @Version('1')
+  @UseInterceptors(IdempotencyInterceptor)
   @Post()
   @ApiOperation({ summary: 'Create a draft fiscal document' })
   @ApiResponse({ status: 201, description: 'Document draft created' })
@@ -49,6 +52,7 @@ export class FiscalDocumentsController {
   }
 
   @Version('1')
+  @UseInterceptors(IdempotencyInterceptor)
   @Post(':id/issue')
   @ApiOperation({ summary: 'Issue/Authorize a fiscal document with AFIP' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
@@ -57,6 +61,7 @@ export class FiscalDocumentsController {
   }
 
   @Version('1')
+  @UseInterceptors(IdempotencyInterceptor)
   @Post(':id/retry')
   @ApiOperation({ summary: 'Retry a failed or pending document issuance' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
@@ -78,11 +83,12 @@ export class FiscalDocumentsController {
   @Version('1')
   @Get(':id/audit')
   @ApiOperation({ summary: 'Get full audit trail for a document' })
-  getAudit() {
-    return {
-      success: true,
-      data: [{ event: 'created', timestamp: new Date() }],
-    };
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
+  getAudit(
+    @Param('id', ParseUUIDPipe) id: UUID,
+    @CurrentTenant() tenantId: UUID,
+  ) {
+    return this.documentsService.getAuditTrail(id, tenantId);
   }
 
   @Version('1')
